@@ -1,3 +1,5 @@
+package server
+
 import (
 	"fmt"
 	"sync"
