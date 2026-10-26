@@ -1,0 +1,10 @@
+{
+    // 学習用リポジトリなので AI によるコード生成のサジェスト（ゴーストテキスト）を無効化する。
+    // gopls による通常の補完（関数名・フィールド名など）はそのまま残る。
+    "editor.inlineSuggest.enabled": false,
+    "github.copilot.enable": {
+        "*": false
+    },
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "chat.disableAIFeatures": true
+}
