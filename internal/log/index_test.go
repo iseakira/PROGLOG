@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,6 +44,8 @@ func TestIndex(t *testing.T) {
 
 	f,_ = os.OpenFile(f.Name(),os.O_RDWR,0600)
 	idx, err = newIndex(f,c)
+	require.NoError(t,err)
+	off, pos, err := idx.Read(-1)
 	require.NoError(t,err)
 	require.Equal(t,uint32(1),off)
 	require.Equal(t,entries[1].Pos,pos)

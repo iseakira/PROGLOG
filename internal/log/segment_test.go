@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-openapi/testify/v2/require"
 	api "github.com/iseakira/proglog/api/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -45,7 +44,7 @@ func TestSegment(t *testing.T) {
 	require.Equal(t, io.EOF, err)
 
 	require.True(t, s.IsMaxed())
-	require.NoError(t, s.index.Close())
+	require.NoError(t, s.Close())
 
 	p, _ := proto.Marshal(want)
 	c.Segment.MaxStoreBytes = uint64(len(p)+lenWidth) * 4

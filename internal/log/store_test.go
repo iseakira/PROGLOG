@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/stretchr/testify/require"
 )
 

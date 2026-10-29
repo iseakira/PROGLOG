@@ -16,13 +16,10 @@ t *testing.T, log *Log,
 "append and read a record succeeds": testAppendRead,
 "offset out of range error":
 testOutOfRangeErr,
-"init with existing segments":
-"reader":
-"truncate":
+"init with existing segments": testInitExisting,
+"reader": testReader,
+"truncate": testTruncate,
 } {
-testInitExisting,
-testReader,
-testTruncate,
 t.Run(scenario, func(t *testing.T) {
 dir, err := os.MkdirTemp("", "store-test")
 require.NoError(t, err)

@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -146,8 +147,8 @@ func (l *Log) LowestOffset() (uint64, error) {
 	return l.segments[0].baseOffset, nil
 }
 
-func (l *Log) highestOffset() (uint64, error) {
-	l.mu.RUnlock()
+func (l *Log) HighestOffset() (uint64, error) {
+	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	return l.highestOffset()
@@ -173,7 +174,7 @@ func (l *Log) Truncate(lowest uint64) error {
 			}
 			continue
 		}
-		segments = append(segment,s)
+		segments = append(segments, s)
 	}
 	l.segments = segments
 	return nil
@@ -183,7 +184,7 @@ func (l *Log) Reader() io.Reader {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	readers := make([]io.Reader, len(l.segments))
-	for i,segment := raneg l.segments {
+	for i, segment := range l.segments {
 		readers[i] = &originReader{segment.store, 0}
 	}
 	return io.MultiReader(readers...)
@@ -195,7 +196,17 @@ type originReader struct {
 }
 
 func (o *originReader) Read(p []byte) (int, error) {
-	n, errr := o.ReadAt(p,o.off)
+	n, err := o.ReadAt(p,o.off)
 	o.off += int64(n)
 	return n, err
+}
+
+func (l *Log) newSegment(off uint64) error {
+	s, err := newSegment(l.Dir, off, l.Config)
+	if err != nil {
+		return err
+	}
+	l.segments = append(l.segments, s)
+	l.activeSegment = s
+	return nil
 }
