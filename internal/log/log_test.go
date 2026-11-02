@@ -1,11 +1,13 @@
 package log
+
 import (
-"io"
-"os"
-"testing"
-"github.com/stretchr/testify/require"
-api "github.com/iseakira/proglog/api/v1"
-"google.golang.org/protobuf/proto"
+	"io"
+	"os"
+	"testing"
+
+	api "github.com/iseakira/proglog/api/v1"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 
@@ -49,7 +51,9 @@ require.NoError(t, log.Close())
 func testOutOfRangeErr(t *testing.T, log *Log) {
 read, err := log.Read(1)
 require.Nil(t, read)
-require.Error(t, err)
+apiErr, ok := err.(api.ErrOffsetOutOfRange)
+require.True(t, ok)
+require.Equal(t, uint64(1), apiErr.Offset)
 require.NoError(t, log.Close())
 }
 
