@@ -2,10 +2,15 @@ package server
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	api "github.com/iseakira/proglog/api/v1"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -25,6 +30,10 @@ type Authorizer interface {
 type Config struct {
 	CommitLog  CommitLog
 	Authorizer Authorizer
+	// 以下は観測用。nil の場合はグローバルの設定(未設定なら何もしない実装)を使う
+	TracerProvider trace.TracerProvider
+	MeterProvider  metric.MeterProvider
+	Logger         *slog.Logger
 }
 
 const (
@@ -122,16 +131,43 @@ func NewGRPCServer(config *Config, grpcOpts ...grpc.ServerOption) (
 	*grpc.Server,
 	error,
 ) {
+	logger := config.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With(slog.String("logger", "server"))
+
+	logOpts := []logging.Option{
+		logging.WithLogOnEvents(logging.FinishCall),
+		logging.WithDurationField(func(duration time.Duration) logging.Fields {
+			return logging.Fields{"grpc.time_ns", duration.Nanoseconds()}
+		}),
+		// ログにトレース ID を入れて、UI 上でトレースとログを紐づけられるようにする
+		logging.WithFieldsFromContext(func(ctx context.Context) logging.Fields {
+			if sc := trace.SpanContextFromContext(ctx); sc.IsSampled() {
+				return logging.Fields{"trace_id", sc.TraceID().String()}
+			}
+			return nil
+		}),
+	}
+
+	var otelOpts []otelgrpc.Option
+	if config.TracerProvider != nil {
+		otelOpts = append(otelOpts, otelgrpc.WithTracerProvider(config.TracerProvider))
+	}
+	if config.MeterProvider != nil {
+		otelOpts = append(otelOpts, otelgrpc.WithMeterProvider(config.MeterProvider))
+	}
+
 	grpcOpts = append(grpcOpts,
-		grpc.StreamInterceptor(
-			grpc_middleware.ChainStreamServer(
-				grpc_auth.StreamServerInterceptor(authenticate),
-			),
+		grpc.StatsHandler(otelgrpc.NewServerHandler(otelOpts...)),
+		grpc.ChainStreamInterceptor(
+			logging.StreamServerInterceptor(interceptorLogger(logger), logOpts...),
+			auth.StreamServerInterceptor(authenticate),
 		),
-		grpc.UnaryInterceptor(
-			grpc_middleware.ChainUnaryServer(
-				grpc_auth.UnaryServerInterceptor(authenticate),
-			),
+		grpc.ChainUnaryInterceptor(
+			logging.UnaryServerInterceptor(interceptorLogger(logger), logOpts...),
+			auth.UnaryServerInterceptor(authenticate),
 		),
 	)
 	gsrv := grpc.NewServer(grpcOpts...)
@@ -170,3 +206,12 @@ func subject(ctx context.Context) string {
 }
 
 type subjectContextKey struct{}
+
+// interceptorLogger は slog.Logger を go-grpc-middleware の logging.Logger に変換する
+func interceptorLogger(l *slog.Logger) logging.Logger {
+	return logging.LoggerFunc(
+		func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
+			l.Log(ctx, slog.Level(lvl), msg, fields...)
+		},
+	)
+}

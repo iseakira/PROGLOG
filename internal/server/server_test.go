@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"flag"
 	"net"
 	"os"
 	"testing"
@@ -17,6 +18,16 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+var (
+	debug = flag.Bool("debug", false, "Enable observability for debugging.")
+	otlp  = flag.Bool("otlp", false, "Send telemetry to an OTLP endpoint (default localhost:4317).")
+)
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
 
 func setupTest(t *testing.T, fn func(*Config)) (
 	rootClient api.LogClient,
@@ -83,6 +94,7 @@ func setupTest(t *testing.T, fn func(*Config)) (
 		CommitLog:  clog,
 		Authorizer: authorizer,
 	}
+	shutdownTelemetry := setupTelemetry(t, cfg)
 
 	if fn != nil {
 		fn(cfg)
@@ -101,6 +113,7 @@ func setupTest(t *testing.T, fn func(*Config)) (
 		server.Stop()
 		l.Close()
 		clog.Remove()
+		shutdownTelemetry()
 	}
 }
 
